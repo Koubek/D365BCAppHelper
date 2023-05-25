@@ -117,19 +117,20 @@ function Global:Get-D365BCManifestFromAppFile {
                     $parentDirectory = Split-Path -Path $Filename
                     $newFilename = Join-Path -Path $parentDirectory -ChildPath "$onlyFilename.zip"
                     $regularStream = $true;
-                    if ([D365BCAppHelper.StreamHelper]::IsRuntimePackage($Filename)) {
+                    $runtimeOffset = -1;
+                    if ([D365BCAppHelper.StreamHelper]::IsRuntimePackage($Filename, [ref]$runtimeOffset)) {
                         $regularStream = $false
                     }
                     # App-files are basically ZIP-files, but with an offest of 40 bytes
                     # So we first read the source file into a FileStream
                     # and then set the Offset of the Stream to 40
-                    # After that we create a new file, copy the offsetted stream into it and save it                    
+                    # After that we create a new file, copy the offsetted stream into it and save it
                     $stream = [System.IO.FileStream]::new($Filename, [System.IO.FileMode]::Open)
                     if ($regularStream -eq $true) {
                         $stream.Seek(40, [System.IO.SeekOrigin]::Begin) | Out-Null
                     }
                     else {
-                        $newStream = [D365BCAppHelper.StreamHelper]::DecodeStream($stream)
+                        $newStream = [D365BCAppHelper.StreamHelper]::DecodeStream($stream, $runtimeOffset)
                         $stream.Close()
                         $stream = $newStream
                         $stream.Seek(0, [System.IO.SeekOrigin]::Begin) | Out-Null

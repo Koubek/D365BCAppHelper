@@ -14,17 +14,19 @@ namespace D365BCAppHelper
 {
     public class StreamHelper
     {
-        public static Stream DecodeStream(string filename)
+        private static long[] ReadOffsets = { 0, 40 };
+
+        public static Stream DecodeStream(string filename, long offset)
         {
             Stream stream;
             using (FileStream fs = new FileStream(filename, FileMode.Open))
             {
-                stream = DecodeStream(fs);
+                stream = DecodeStream(fs, offset);
                 fs.Close();
             }
             return stream;
         }
-        public static Stream DecodeStream(Stream stream)
+        public static Stream DecodeStream(Stream stream, long offset, long headerLength = 8)
         {
             uint x = 0;
             uint y = 0;
@@ -50,14 +52,14 @@ namespace D365BCAppHelper
             #endregion
 
             // Prepare the source Stream, set Positon to 48 (Offset = 40; Header-length = 8)
-            stream.Seek(40 + HeaderSource.Length, SeekOrigin.Begin);
+            stream.Seek(offset + HeaderSource.Length, SeekOrigin.Begin);
 
             // Create new MemoryStream, which will contain the decoded Stream
             MemoryStream ms = new MemoryStream();
 
             // Only used as a placeholder
-            int offset = 0;
-            while (ms.Length < (stream.Length - 48))
+            int offsetPlaceholder = 0;
+            while (ms.Length < (stream.Length - (offset + headerLength)))
             {
                 read = stream.Read(buffer, 0, buffer.Length);
                 if (read != 0)
@@ -76,7 +78,7 @@ namespace D365BCAppHelper
                         byte value = key[(int)key[(int)x] + (int)key[(int)y] & (int)byte.MaxValue];
                         #endregion
 
-                        buffer[offset + index] = (byte)((uint)buffer[offset + index] ^ (uint)value);
+                        buffer[offsetPlaceholder + index] = (byte)((uint)buffer[offsetPlaceholder + index] ^ (uint)value);
                     }
 
                     ms.Write(buffer, 0, read);
@@ -84,26 +86,45 @@ namespace D365BCAppHelper
             }
             return ms;
         }
+        public static bool IsRuntimePackage(string filename, out long offset)
+        {
+            foreach (long currOffset in ReadOffsets)
+            {
+                offset = currOffset;
+                if (IsRuntimePackageWithOffset(filename, offset))
+                {
+                    return true;
+                }
+            }
 
-        public static bool IsRuntimePackage(string filename)
-        {
-            return (IsRuntimePackage(filename, 40) || IsRuntimePackage(filename, 0));
+            offset = -1;
+            return false;
         }
-        public static bool IsRuntimePackage(Stream stream)
+        public static bool IsRuntimePackage(Stream stream, out long offset)
         {
-            return (IsRuntimePackage(stream, 40) || IsRuntimePackage(stream, 0));
+            foreach (long currOffset in ReadOffsets)
+            {
+                offset = currOffset;
+                if (IsRuntimePackageWithOffset(stream, offset))
+                {
+                    return true;
+                }
+            }
+
+            offset = -1;
+            return false;
         }
-        public static bool IsRuntimePackage(string filename, long offset)
+        public static bool IsRuntimePackageWithOffset(string filename, long offset)
         {
             bool runtimePackage = false;
             using (FileStream fs = new FileStream(filename, FileMode.Open))
             {
-                runtimePackage = IsRuntimePackage(fs, offset);
+                runtimePackage = IsRuntimePackageWithOffset(fs, offset);
                 fs.Close();
             }
             return runtimePackage;
         }
-        public static bool IsRuntimePackage(Stream stream, long offset)
+        public static bool IsRuntimePackageWithOffset(Stream stream, long offset)
         {
             if (stream == null)
                 throw new ArgumentNullException("stream");
@@ -133,27 +154,27 @@ namespace D365BCAppHelper
 
         private static readonly byte[] KeySource = new byte[6]
         {
-          (byte) 15,
-          (byte) 11,
-          (byte) 81,
-          (byte) 137,
-          (byte) 184,
-          (byte) 120
+            (byte) 15,
+            (byte) 11,
+            (byte) 81,
+            (byte) 137,
+            (byte) 184,
+            (byte) 120
         };
 
         private static readonly byte[] HeaderSource = new byte[8]
         {
-          (byte) 46,
-          (byte) 78,
-          (byte) 69,
-          (byte) 65,
-          (byte) 0,
-          (byte) 0,
-          (byte) 0,
-          (byte) 1
+            (byte) 46,
+            (byte) 78,
+            (byte) 69,
+            (byte) 65,
+            (byte) 0,
+            (byte) 0,
+            (byte) 0,
+            (byte) 1
         };
     }
-}
+}        
 "@
         Add-Type -TypeDefinition $source
     }
